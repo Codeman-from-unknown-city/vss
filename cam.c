@@ -156,7 +156,7 @@ static void wait_ready_state()
 		panic("select timeout");
 }
 
-void grab_img_from_camera(struct img* imgptr)
+void grab_img_from_camera(void (*process_img)(void* base, size_t size))
 {
 	struct v4l2_buffer buf;
 	wait_ready_state();
@@ -165,13 +165,12 @@ void grab_img_from_camera(struct img* imgptr)
 	buf.memory = V4L2_MEMORY_MMAP;
 	if (-1 == ioctl(camfd, VIDIOC_DQBUF, &buf)) {
 		if (EAGAIN == errno) {
-			grab_img_from_camera(imgptr);
+			grab_img_from_camera(process_img);
 			return;
 		}
 		syserr("Can not grab img");
 	}
-	imgptr->size = buf.bytesused;
-	imgptr->base = mmaped_imgs[buf.index];
+	process_img(mmaped_imgs[buf.index], buf.bytesused);
 	if (-1 == ioctl(camfd, VIDIOC_QBUF, &buf))
 		syserr("VIDIOC_QBUF");
 }
