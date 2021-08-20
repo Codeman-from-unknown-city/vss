@@ -33,25 +33,25 @@ static void init_loc_addr()
 static void setup_tcp()
 {
 	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-		syserr("socket");
+		die("socket");
 	int opts = SO_REUSEADDR | SO_REUSEPORT;
 	const int on = 1;
 	if (setsockopt(listenfd, SOL_SOCKET, opts, &on, sizeof(on)) == -1)
-		syserr("setsockopt");
+		die("setsockopt");
 	init_loc_addr();
 	if (bind(listenfd, SAPC(&loc_addr), addrlen) == -1)
-		syserr("bind");
+		die("bind");
 	if (listen(listenfd, NOBACKLOG) == -1)
-		syserr("listen");
+		die("listen");
 }
 
 static void setup_udp()
 {
 	if ((peerfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		syserr("socket");
+		die("socket");
 	init_loc_addr();
 	if (bind(peerfd, SAPC(&loc_addr), addrlen) == -1)
-		syserr("bind");
+		die("bind");
 }
 
 void setup_server()
@@ -64,7 +64,7 @@ void wait_connection()
 {
 	addrlen = sizeof(rem_addr);
 	if ((connfd = accept(listenfd, SAPC(&rem_addr), &addrlen)) == -1)
-		syserr("accept");
+		die("accept");
 	char tmp;
 	recvfrom(peerfd, &tmp, 1, 0, SAPC(&rem_addr), &addrlen);
 }

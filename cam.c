@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <linux/videodev2.h>
 
 #include "cam.h"
@@ -25,11 +26,11 @@ static void open_cam()
 {
 	struct stat st;
 	if (stat(CAMNAME, &st) == -1)
-		syserr("stat");
+		die("Cannot identify %s", CAMNAME);
 	if (!S_ISCHR(st.st_mode)) 
-		panic("%s is no device", CAMNAME);
+		die("%s is no device", CAMNAME);
 	if ((camfd = open(CAMNAME, O_RDWR | O_NONBLOCK)) == -1)
-		syserr("open");
+		die("Cannot open %s", CAMNAME);
 }
 
 static void test_cap()
@@ -37,13 +38,13 @@ static void test_cap()
 	struct v4l2_capability cap;
 	if (ioctl(camfd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL)
-			panic("%s is no V4L2 device", CAMNAME);
-		syserr("ioctl");
+			die("%s is no V4L2 device", CAMNAME);
+		die("ioctl");
 	}
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-		panic("%s is no video capture device", CAMNAME);
+		die("%s is no video capture device", CAMNAME);
 	if (!(cap.capabilities & V4L2_CAP_STREAMING))
-		panic("%s does not support streaming i/o", CAMNAME);
+		die("%s does not support streaming i/o", CAMNAME);
 }
 
 static void setfmt()
@@ -52,15 +53,15 @@ static void setfmt()
 	memclr(&fmt, sizeof(fmt));
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (ioctl(camfd, VIDIOC_G_FMT, &fmt) == -1)
-		syserr("VIDIOC_G_FMT");
+		die("VIDIOC_G_FMT");
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 	fmt.fmt.pix.width = VWIDTH;
 	fmt.fmt.pix.height = VHEIGHT;
 	fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
 	if (ioctl(camfd, VIDIOC_S_FMT, &fmt) == -1)
-		syserr("VIDIOC_S_FMT");
+		die("VIDIOC_S_FMT");
 	if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_MJPEG)
-		panic("Camera does not support mjpeg pixel format");
+		die("Camera does not support mjpeg pixel format");
 }
 
 static void init_mmap()
@@ -72,17 +73,17 @@ static void init_mmap()
         req.memory = V4L2_MEMORY_MMAP;
 	if (ioctl(camfd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL)
-			panic("Camera does not support memory mappimg");
-		syserr("VIDIOC_REQBUFS");
+			die("Camera does not support memory mappimg");
+		die("VIDIOC_REQBUFS");
 	}
 	if (req.count < NBUFS)
-		panic("Insufficient buffer memory on camera");
+		die("Insufficient buffer memory on camera");
 }
 
 static void mmap_imgs()
 {
         if ((mmaped_imgs = calloc(nimgs, sizeof(*mmaped_imgs))) == NULL)
-		syserr("calloc");
+		die("calloc");
 	struct v4l2_buffer buf;
         for (int i = 0; i < nimgs; ++i) {
 		memclr(&buf, sizeof(buf));
@@ -90,11 +91,11 @@ static void mmap_imgs()
                 buf.memory = V4L2_MEMORY_MMAP;
                 buf.index = i;
 		if (ioctl(camfd, VIDIOC_QUERYBUF, &buf) == -1)
-			syserr("VIDIOC_QUERYBUF");
+			die("VIDIOC_QUERYBUF");
                 mmaped_imgs[i] = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, 
 						MAP_SHARED, camfd, buf.m.offset);
 		if (mmaped_imgs[i] == MAP_FAILED)
-			syserr("mmap");
+			die("mmap");
         }
 }
 
@@ -122,17 +123,17 @@ void turn_on_camera()
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = i;
 		if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
-			syserr("VIDIOC_QBUF");
+			die("VIDIOC_QBUF");
 	}
 	if (ioctl(camfd, VIDIOC_STREAMON, &type) == -1)
-		syserr("VIDIOC_STREAMON");
+		die("VIDIOC_STREAMON");
 }
 
 void turn_off_camera()
 {
     	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (ioctl(camfd, VIDIOC_STREAMOFF, &type) == -1)
-		syserr("VIDIOC_STREAMOFF");
+		die("VIDIOC_STREAMOFF");
 }
 
 static void wait_ready_state()
@@ -150,10 +151,10 @@ static void wait_ready_state()
 			wait_ready_state();
 		}
 		else
-			syserr("select");
+			die("select");
 	}
 	if (!retval)
-		panic("select timeout");
+		die("select timeout");
 }
 
 void grab_img_from_camera(void (*process_img)(void* base, size_t size))
@@ -168,10 +169,10 @@ void grab_img_from_camera(void (*process_img)(void* base, size_t size))
 			grab_img_from_camera(process_img);
 			return;
 		}
-		syserr("Can not grab img");
+		die("Can not grab img");
 	}
 	process_img(mmaped_imgs[buf.index], buf.bytesused);
 	if (-1 == ioctl(camfd, VIDIOC_QBUF, &buf))
-		syserr("VIDIOC_QBUF");
+		die("VIDIOC_QBUF");
 }
 
