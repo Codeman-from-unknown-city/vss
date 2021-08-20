@@ -70,6 +70,8 @@ void wait_connection()
 
 bool client_connected()
 {
+	if (connfd == -1)
+		return false;
 	char test;
 	bool conn_reset = send(connfd, &test, 1, 0) == -1;
 	if (conn_reset)
@@ -79,50 +81,27 @@ bool client_connected()
 
 #define PCKT_SIZE 65472
 
-#define min(a, b) a > b ? b : a
-
-#pragma pack(1)
-struct header {
-	uint8_t num;
-	uint16_t size;
-};
-
-#define HSIZE sizeof(struct header)
-
 struct pckt {
-	struct header header;
-	char data[PCKT_SIZE - HSIZE];
+	size_t size;
+	void* data[PCKT_SIZE - sizeof(size_t)];
 };
-#pragma pack(0)
-
-static void buildpckt(struct pckt* pckt, uint8_t num, 
-			uint16_t size, char* data)
-{
-	pckt->header.num = num;
-	pckt->header.size = htons(size);
-	memcpy(pckt->data, data, size);
-}
-
-static void sendall(int sockfd, void* data, size_t size, 
-			struct sockaddr* addr, socklen_t addrlen)
-{
-	ssize_t nsent = 0;
-	while (nsent < size)
-		nsent += sendto(sockfd, data, size, 0, addr, addrlen);
-}
 
 void send_msg(void* data, size_t size)
 {
-	struct pckt pckt;
-	uint8_t npckts = (uint8_t) ceil((double) size / (PCKT_SIZE - HSIZE));
-	uint16_t send_data_size;
-	while (npckts) {
-		send_data_size = min(size, PCKT_SIZE - HSIZE);
-		buildpckt(&pckt, npckts, send_data_size, data);
-		sendall(peerfd, &pckt, PCKT_SIZE, SAPC(&rem_addr), addrlen);
-		size -= send_data_size;
-		data += send_data_size;
-		npckts--;
+	static struct pckt pckt;
+	pckt.size = size;
+	memcpy(pckt.data, data, size);
+	ssize_t ns = 0;
+	ssize_t prev  = 0;
+	while (ns < size) {
+		ns += sendto(peerfd, &pckt + ns, size - ns, 0, 
+				SAPC(&rem_addr), addrlen);
+		if (ns < prev) {
+			fprintf(stderr, "Writing error: %s\n", strerror(errno));
+			close(connfd);
+			connfd = -1;
+		}
+		prev = ns;
 	}
 }
 
