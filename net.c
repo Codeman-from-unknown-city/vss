@@ -75,7 +75,7 @@ bool client_connected()
 	if (connfd == -1)
 		return false;
 	char test;
-	bool conn_reset = send(connfd, &test, 1, 0) == -1;
+	bool conn_reset = send(connfd, &test, 1, MSG_NOSIGNAL) == -1;
 	if (conn_reset)
 		close(connfd);
 	return !conn_reset;
