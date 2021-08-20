@@ -29,7 +29,6 @@ static void init_loc_addr()
 	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 }
 
-
 static void setup_tcp()
 {
 	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -96,14 +95,16 @@ struct pckt {
 };
 #pragma pack(0)
 
-static void buildpckt(struct pckt* pckt, uint8_t num, uint16_t size, char* data)
+static void buildpckt(struct pckt* pckt, uint8_t num, 
+			uint16_t size, char* data)
 {
 	pckt->header.num = num;
 	pckt->header.size = htons(size);
 	memcpy(pckt->data, data, size);
 }
 
-static void sendall(int sockfd, void* data, size_t size, struct sockaddr* addr, socklen_t addrlen)
+static void sendall(int sockfd, void* data, size_t size, 
+			struct sockaddr* addr, socklen_t addrlen)
 {
 	ssize_t nsent = 0;
 	while (nsent < size)
