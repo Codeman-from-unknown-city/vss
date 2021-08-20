@@ -82,14 +82,19 @@ bool client_connected()
 }
 
 #define PCKT_SIZE 65472
+#define DATA_SIZE PCKT_SIZE - sizeof(size_t)
 
 struct pckt {
 	size_t size;
-	void* data[PCKT_SIZE - sizeof(size_t)];
+	void* data[DATA_SIZE];
 };
 
 void send_msg(void* data, size_t size)
 {
+	if (size > DATA_SIZE) {
+		fprintf(stderr, "Sending error: msg too big (%u)\n", size);
+		return;
+	}
 	static struct pckt pckt;
 	pckt.size = size;
 	memcpy(pckt.data, data, size);
@@ -99,9 +104,10 @@ void send_msg(void* data, size_t size)
 		ns += sendto(peerfd, &pckt + ns, size - ns, 0, 
 				SAPC(&rem_addr), addrlen);
 		if (ns < prev) {
-			fprintf(stderr, "Writing error: %s\n", strerror(errno));
+			fprintf(stderr, "Sending error: %s\n", strerror(errno));
 			close(connfd);
 			connfd = -1;
+			return;
 		}
 		prev = ns;
 	}
