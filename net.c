@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <math.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include "utils.h"
 
