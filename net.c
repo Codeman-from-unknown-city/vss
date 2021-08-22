@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <errno.h>
+#include <syslog.h>
 
 #include "utils.h"
 
@@ -72,8 +73,6 @@ void wait_connection()
 
 bool client_connected()
 {
-	if (connfd == -1)
-		return false;
 	char test;
 	bool conn_reset = send(connfd, &test, 1, MSG_NOSIGNAL) == -1;
 	if (conn_reset)
@@ -81,18 +80,18 @@ bool client_connected()
 	return !conn_reset;
 }
 
-#define PCKT_SIZE 65472
-#define DATA_SIZE PCKT_SIZE - sizeof(size_t)
+#define PCKT_SIZE 65507
+#define DATA_SIZE PCKT_SIZE - sizeof(uint16_t)
 
 struct pckt {
-	size_t size;
+	uint16_t size;
 	void* data[DATA_SIZE];
 };
 
 void send_msg(void* data, size_t size)
 {
 	if (size > DATA_SIZE) {
-		fprintf(stderr, "Sending error: msg too big (%u)\n", size);
+		syslog(LOG_WARNING, "send_msg: msg too big (%u)\n", size);
 		return;
 	}
 	static struct pckt pckt;
@@ -101,14 +100,10 @@ void send_msg(void* data, size_t size)
 	ssize_t ns = 0;
 	ssize_t prev  = 0;
 	while (ns < size) {
-		ns += sendto(peerfd, &pckt + ns, size - ns, 0, 
+		ns += sendto(peerfd, &pckt + ns, size - ns, MSG_NOSIGNAL, 
 				SAPC(&rem_addr), addrlen);
-		if (ns < prev) {
-			fprintf(stderr, "Sending error: %s\n", strerror(errno));
-			close(connfd);
-			connfd = -1;
+		if (ns < prev)
 			return;
-		}
 		prev = ns;
 	}
 }
