@@ -7,8 +7,7 @@
 
 int main()
 {
-	if (become_daemon() == -1)
-		die("Cannot become daemon");
+	become_daemon();
 	setup_camera();
 	setup_server();
 	while (true) {
