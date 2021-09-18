@@ -141,10 +141,8 @@ static void wait_ready_state()
 	tv.tv_usec = 0;
 	int retval = select(camfd + 1, &fds, NULL, NULL, &tv);
 	if (retval == -1) {
-		if (EINTR == errno) {
-			puts("Waiting...");
+		if (EINTR == errno) 
 			wait_ready_state();
-		}
 		else
 			die("select");
 	}
