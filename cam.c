@@ -53,7 +53,6 @@ static void setfmt()
 	if (ioctl(camfd, VIDIOC_G_FMT, &fmt) == -1)
 		die("VIDIOC_G_FMT");
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-	fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
 	if (ioctl(camfd, VIDIOC_S_FMT, &fmt) == -1)
 		die("VIDIOC_S_FMT");
 	if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_MJPEG)
