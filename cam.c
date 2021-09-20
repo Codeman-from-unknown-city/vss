@@ -135,32 +135,36 @@ static void wait_ready_state()
 	FD_ZERO(&fds);
 	FD_SET(camfd, &fds);
 	struct timeval tv;
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	int retval = select(camfd + 1, &fds, NULL, NULL, &tv);
-	if (retval == -1) {
-		if (EINTR == errno) 
-			wait_ready_state();
-		else
-			die("select");
+	for (;;) {
+		tv.tv_sec = 2;
+		tv.tv_usec = 0;
+		int retval = select(camfd + 1, &fds, NULL, NULL, &tv);
+		if (retval == -1) {
+			if (EINTR == errno) 
+				continue;
+			else
+				die("select");
+		}
+		if (!retval)
+			die("select timeout");
+		break;
 	}
-	if (!retval)
-		die("select timeout");
 }
 
 void grab_img_from_camera(void (*process_img)(void* base, size_t size))
 {
-	struct v4l2_buffer buf;
 	wait_ready_state();
+	struct v4l2_buffer buf;
 	memclr(&buf, sizeof(buf));
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
-	if (-1 == ioctl(camfd, VIDIOC_DQBUF, &buf)) {
-		if (EAGAIN == errno) {
-			grab_img_from_camera(process_img);
-			return;
+	for (;;) {
+		if (-1 == ioctl(camfd, VIDIOC_DQBUF, &buf)) {
+			if (EAGAIN == errno)
+				continue;
+			die("VIDIOC_DQBUF");
 		}
-		die("Can not grab img");
+		break;
 	}
 	process_img(mmaped_imgs[buf.index], buf.bytesused);
 	if (-1 == ioctl(camfd, VIDIOC_QBUF, &buf))
