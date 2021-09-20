@@ -94,11 +94,25 @@ static void mmap_imgs()
         }
 }
 
+static void enqueue_bufs()
+{
+	struct v4l2_buffer buf;
+	for (int i = 0; i < nimgs; i++) {
+		memclr(&buf, sizeof(buf));
+		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf.memory = V4L2_MEMORY_MMAP;
+		buf.index = i;
+		if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
+			die("VIDIOC_QBUF");
+	}
+}
+
 static void init_cam()
 {
 	setfmt();
 	init_mmap();
 	mmap_imgs();
+	enqueue_bufs();
 }
 
 void setup_camera()
@@ -111,15 +125,6 @@ void setup_camera()
 void turn_on_camera()
 {
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	struct v4l2_buffer buf;
-	for (int i = 0; i < nimgs; i++) {
-		memclr(&buf, sizeof(buf));
-		buf.type = type;
-		buf.memory = V4L2_MEMORY_MMAP;
-		buf.index = i;
-		if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
-			die("VIDIOC_QBUF");
-	}
 	if (ioctl(camfd, VIDIOC_STREAMON, &type) == -1)
 		die("VIDIOC_STREAMON");
 }
