@@ -94,6 +94,20 @@ static void mmap_imgs()
         }
 }
 
+static void init_cam()
+{
+	setfmt();
+	init_mmap();
+	mmap_imgs();
+}
+
+void setup_camera()
+{
+	open_cam();
+	test_cap();
+	init_cam();
+}
+
 static void enqueue_bufs()
 {
 	struct v4l2_buffer buf;
@@ -107,26 +121,18 @@ static void enqueue_bufs()
 	}
 }
 
-static void init_cam()
-{
-	setfmt();
-	init_mmap();
-	mmap_imgs();
-	enqueue_bufs();
-}
-
-void setup_camera()
-{
-	open_cam();
-	test_cap();
-	init_cam();
-}
-
 void turn_camera(enum CAM_STATE state)
 {
+	int action = VIDIOC_STREAMOFF;
+	char* errmsg = "VIDIOC_STREAMOFF";
+	if (state == ON) {
+		enqueue_bufs();
+		action = VIDIOC_STREAMON;
+		errmsg = "VIDIOC_STREAMON";
+	}
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, state == ON ? VIDIOC_STREAMON : VIDIOC_STREAMOFF, &type) == -1)
-		die(state == ON ? "VIDIOC_STREAMON" : "VIDIOC_STREAMOFF");
+	if (ioctl(camfd, action, &type) == -1)
+		die(errmsg);
 }
 
 static void wait_ready_state()
