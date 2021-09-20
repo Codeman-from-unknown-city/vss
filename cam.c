@@ -122,18 +122,11 @@ void setup_camera()
 	init_cam();
 }
 
-void turn_on_camera()
+void turn_camera(enum CAM_STATE state)
 {
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, VIDIOC_STREAMON, &type) == -1)
-		die("VIDIOC_STREAMON");
-}
-
-void turn_off_camera()
-{
-    	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, VIDIOC_STREAMOFF, &type) == -1)
-		die("VIDIOC_STREAMOFF");
+	if (ioctl(camfd, state == ON ? VIDIOC_STREAMON : VIDIOC_STREAMOFF, &type) == -1)
+		die(state == ON ? "VIDIOC_STREAMON" : "VIDIOC_STREAMOFF");
 }
 
 static void wait_ready_state()

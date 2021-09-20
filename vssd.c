@@ -12,10 +12,10 @@ int main()
 	setup_server();
 	while (true) {
 		wait_connection();
-		turn_on_camera();
+		turn_camera(ON);
 		while (client_connected())
 			grab_img_from_camera(send_msg);
-		turn_off_camera();
+		turn_camera(OFF);
 	}
 	return 0;
 }
