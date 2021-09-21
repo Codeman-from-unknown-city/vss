@@ -85,7 +85,7 @@ bool client_connected()
 #define MAX_DATA_SIZE MAX_PCKT_SIZE - sizeof(PCKT_SIZE_FIELD_TYPE)
 
 struct __attribute__((__packed__)) pckt {
-	PCKT_SIZE_FIEL_SIZE size;
+	PCKT_SIZE_FIELD_TYPE size;
 	void* data[MAX_DATA_SIZE];
 };
 
