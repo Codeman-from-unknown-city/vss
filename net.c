@@ -80,17 +80,18 @@ bool client_connected()
 	return !conn_reset;
 }
 
-#define PCKT_SIZE 65472
-#define DATA_SIZE PCKT_SIZE - sizeof(size_t)
+#define MAX_PCKT_SIZE 65507
+#define PCKT_SIZE_FIELD_TYPE uint16_t
+#define MAX_DATA_SIZE MAX_PCKT_SIZE - sizeof(PCKT_SIZE_FIELD_TYPE)
 
 struct __attribute__((__packed__)) pckt {
-	size_t size;
-	void* data[DATA_SIZE];
+	PCKT_SIZE_FIEL_SIZE size;
+	void* data[MAX_DATA_SIZE];
 };
 
 void send_msg(void* data, size_t size)
 {
-	if (size > DATA_SIZE) {
+	if (size > MAX_DATA_SIZE) {
 		syslog(LOG_WARNING, "send_msg: msg too big (%u)", size);
 		return;
 	}
@@ -99,8 +100,9 @@ void send_msg(void* data, size_t size)
 	memcpy(pckt.data, data, size);
 	ssize_t ns = 0;
 	ssize_t prev  = 0;
-	while (ns < PCKT_SIZE) {
-		ns += sendto(peerfd, &pckt + ns, PCKT_SIZE - ns, MSG_NOSIGNAL,
+	size += sizeof(PCKT_SIZE_FIELD_TYPE);
+	while (ns < size) {
+		ns += sendto(peerfd, &pckt + ns, size - ns, MSG_NOSIGNAL,
 				SAPC(&rem_addr), addrlen);
 		if (ns < prev)
 			return;
