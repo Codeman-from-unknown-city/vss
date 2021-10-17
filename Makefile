@@ -1,6 +1,6 @@
 CC      = gcc
-CFLAGS  = -g3 -O0 # for debbuging
-LDFLAGS = -lm
+#CFLAGS  = -g3 -O0 # for debbuging
+LDFLAGS = -lm -lbluetooth
 
 all: vssd
 

@@ -23,8 +23,7 @@ int nimgs = NBUFS;
 static void open_cam()
 {
 	struct stat st;
-	if (stat(CAMNAME, &st) == -1)
-		die("Cannot identify %s", CAMNAME);
+	EXIT_WITH_MSG_IF_SYSCALL_FAILS(stat(CAMNAME, &st), "Cannot identify %s", CAMNAME);
 	if (!S_ISCHR(st.st_mode)) 
 		die("%s is no device", CAMNAME);
 	if ((camfd = open(CAMNAME, O_RDWR | O_NONBLOCK)) == -1)
@@ -37,7 +36,7 @@ static void test_cap()
 	if (ioctl(camfd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL)
 			die("%s is no V4L2 device", CAMNAME);
-		die("ioctl");
+		die("VIDIOC_QUERYCAP");
 	}
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
 		die("%s is no video capture device", CAMNAME);
@@ -50,11 +49,9 @@ static void setfmt()
 	struct v4l2_format fmt;
 	memclr(&fmt, sizeof(fmt));
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, VIDIOC_G_FMT, &fmt) == -1)
-		die("VIDIOC_G_FMT");
+	EXIT_IF_SYSCALL_FAILS(ioctl(camfd, VIDIOC_G_FMT, &fmt));
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-	if (ioctl(camfd, VIDIOC_S_FMT, &fmt) == -1)
-		die("VIDIOC_S_FMT");
+	EXIT_IF_SYSCALL_FAILS(ioctl(camfd, VIDIOC_S_FMT, &fmt));
 	if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_MJPEG)
 		die("Camera does not support mjpeg pixel format");
 }
@@ -85,8 +82,7 @@ static void mmap_imgs()
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 buf.memory = V4L2_MEMORY_MMAP;
                 buf.index = i;
-		if (ioctl(camfd, VIDIOC_QUERYBUF, &buf) == -1)
-			die("VIDIOC_QUERYBUF");
+		EXIT_IF_SYSCALL_FAILS(ioctl(camfd, VIDIOC_QUERYBUF, &buf));
                 mmaped_imgs[i] = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, 
 						MAP_SHARED, camfd, buf.m.offset);
 		if (mmaped_imgs[i] == MAP_FAILED)
@@ -116,8 +112,7 @@ static void enqueue_bufs()
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = i;
-		if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
-			die("VIDIOC_QBUF");
+		EXIT_IF_SYSCALL_FAILS(ioctl(camfd, VIDIOC_QBUF, &buf));
 	}
 }
 
@@ -144,12 +139,11 @@ static void wait_ready_state()
 	for (;;) {
 		tv.tv_sec = 2;
 		tv.tv_usec = 0;
-		int retval = select(camfd + 1, &fds, NULL, NULL, &tv);
+		int retval = select(camfd + 1, &fds, NULL, NULL, NULL);
 		if (retval == -1) {
 			if (EINTR == errno) 
 				continue;
-			else
-				die("select");
+			die("select");
 		}
 		if (!retval)
 			die("select timeout");
@@ -173,7 +167,6 @@ void grab_img_from_camera(void (*process_img)(void* base, size_t size))
 		break;
 	}
 	process_img(mmaped_imgs[buf.index], buf.bytesused);
-	if (-1 == ioctl(camfd, VIDIOC_QBUF, &buf))
-		die("VIDIOC_QBUF");
+	EXIT_IF_SYSCALL_FAILS(ioctl(camfd, VIDIOC_QBUF, &buf));
 }
 
