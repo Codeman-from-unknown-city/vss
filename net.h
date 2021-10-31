@@ -3,11 +3,11 @@
 #include "stdbool.h"
 #include "stddef.h"
 
-void setup_server();
+struct server* server_setup(short port);
 
-void wait_connection();
+void server_wait_connection(struct server* s);
 
-bool client_connected();
+bool server_client_connected(struct server* s);
 
-void send_msg(void* data, size_t size);
+void server_send_msg(struct server* s, void* data, size_t size);
 
