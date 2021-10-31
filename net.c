@@ -125,7 +125,7 @@ static void send_msg(int peerfd, struct sockaddr* rem_addr, socklen_t addrlen,
 	size += sizeof(PCKT_SIZE_FIELD_TYPE);
 	while (ns < size) {
 		ns += sendto(peerfd, &pckt + ns, size - ns, MSG_NOSIGNAL,
-				SAPC(&rem_addr), addrlen);
+				rem_addr, addrlen);
 		if (ns < prev)
 			return;
 		prev = ns;
