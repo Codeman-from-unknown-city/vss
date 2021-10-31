@@ -1,13 +1,21 @@
 #pragma once
 
-void setup_camera();
+#include <stddef.h>
+#include <linux/videodev2.h>
 
-enum CAM_STATE {
-	ON,
-	OFF
-};
+int cam_open(char* path);
 
-void turn_camera(enum CAM_STATE state);
+void cam_setfmt(int camfd, int imgh, int imgw, int pixfmt);
 
-void grab_img_from_camera(void (*process_img)(void* base, size_t size));
+void cam_setup(int camfd);
+
+void cam_turn_on(int camfd);
+
+void cam_turn_off(int camfd);
+
+void cam_grab_and_process_img(
+	int camfd,
+	void (*process_img)(void* base, size_t size, void* args),
+	void* args
+);
 
