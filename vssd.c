@@ -7,7 +7,9 @@
 
 int main()
 {
+#ifdef __DAEMON__
 	become_daemon();
+#endif
 	setup_camera();
 	setup_server();
 	while (true) {
