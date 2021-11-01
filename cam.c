@@ -74,7 +74,7 @@ static void req_bufs(int camfd, size_t* nimgs)
 	}
 	if (req.count < *nimgs)
 		die("Insufficient buffer memory on camera");
-	*nimsg = req.count;
+	*nimgs = req.count;
 }
 
 void** cam_mmap_imgs(int camfd, size_t* nimgs)
@@ -107,7 +107,7 @@ struct v4l2_buffer clipboard = {
 void cam_enqueue_img(int camfd, size_t index)
 {
 	clipboard.index = index;
-	if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
+	if (ioctl(camfd, VIDIOC_QBUF, &clipboard) == -1)
 		die("Can't enqueue buffer");
 }
 
@@ -135,7 +135,7 @@ void cam_dequeue_img(int camfd, size_t* index, size_t* size)
 {
 	wait_ready_state(camfd);
 	for (;;) {
-		if (ioctl(camfd, VIDIOC_DQBUF, &buf)) {
+		if (ioctl(camfd, VIDIOC_DQBUF, &clipboard)) {
 			if (EAGAIN == errno)
 				continue;
 			die("Can't dequeue buffer");

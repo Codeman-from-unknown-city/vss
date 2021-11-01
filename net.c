@@ -33,6 +33,7 @@ int ip_named_socket(int type, char* hostname, unsigned short port)
 		loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if (bind(sockfd, SAPC(&loc_addr), sizeof(loc_addr)) == -1)
 		die("Can't bind a name to a socket");	
+	return sockfd;
 }
 
 int net_wait_connection(int listenfd, int peerfd, struct sockaddr_in* rem_addr,

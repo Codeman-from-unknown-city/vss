@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define MAX_PCKT_SIZE 65507
 
