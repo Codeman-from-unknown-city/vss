@@ -14,126 +14,55 @@
 #include "utils.h"
 
 #define SAPC(ptr) (struct sockaddr*) ptr
-#define NOBACKLOG 0
 
-struct server {
-	struct sockaddr_in rem_addr;
-	socklen_t addrlen;
-	int listenfd;
-	int connfd;
-	int peerfd;
-};
-
-static inline int xsocket(int domain, int type, int protocol)
+int ip_named_socket(int type, char* hostname, unsigned short port)
 {
-	int sockfd = socket(domain, type, protocol);
+	int sockfd = socket(AF_INET, type, 0);
 	if (sockfd == -1)
-		die("Can't create socket");
-	return sockfd;
-}
-
-static inline void xbind(int sockfd, const struct sockaddr_in* addr,
-			socklen_t addrlen)
-{
-	if (bind(sockfd, SAPC(addr), addrlen) == -1)
+		die("Can't create a socket");
+	int opts = SO_REUSEADDR | SO_REUSEPORT;
+	const int on = 1;
+	if (setsockopt(sockfd, SOL_SOCKET, opts, &on, sizeof(on)) == -1)
+		die("Can't set socket options");
+	struct sockaddr_in loc_addr;
+	loc_addr.sin_family = AF_INET;
+	loc_addr.sin_port = htons(port);
+	if (hostname && !inet_aton(hostname, &loc_addr.sin_addr))
+		die("%s is invalid internet address");
+	else
+		loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sockfd, SAPC(&loc_addr), sizeof(loc_addr)) == -1)
 		die("Can't bind a name to a socket");	
 }
 
-static inline void init_loc_addr(struct sockaddr_in* addr, short port)
+int net_wait_connection(int listenfd, int peerfd, struct sockaddr_in* rem_addr,
+			 socklen_t* addrlen)
 {
-	memclr(addr, sizeof(struct sockaddr_in));
-	addr->sin_family = AF_INET;
-	addr->sin_port = htons(port);
-	addr->sin_addr.s_addr = htonl(INADDR_ANY);
-}
-
-static void setup_tcp(struct server* serv, short port)
-{
-	serv->listenfd = xsocket(AF_INET, SOCK_STREAM, 0);
-	int opts = SO_REUSEADDR | SO_REUSEPORT;
-	const int on = 1;
-	if (setsockopt(serv->listenfd, SOL_SOCKET, opts, &on, sizeof(on)) == -1)
-		die("Can't set socket options");
-	struct sockaddr_in loc_addr;
-	init_loc_addr(&loc_addr, port);
-	xbind(serv->listenfd, &loc_addr, sizeof(loc_addr));
-	if (listen(serv->listenfd, NOBACKLOG) == -1)
-		die("Can't listen for connections on a socket");
-}
-
-static void setup_udp(struct server* serv, short port)
-{
-	serv->peerfd = xsocket(AF_INET, SOCK_DGRAM, 0);
-	struct sockaddr_in loc_addr;
-	init_loc_addr(&loc_addr, port);
-	xbind(serv->peerfd, &loc_addr, sizeof(loc_addr));
-}
-
-struct server* server_setup(short port)
-{
-	struct server* server = malloc(sizeof(*server));
-	if (server == NULL)
-		die("Out of memory");
-	setup_tcp(server, port);
-	setup_udp(server, port);
-	return server;
-}
-
-void server_wait_connection(struct server* s)
-{
-	s->addrlen = sizeof(s->rem_addr);
-	s->connfd = accept(s->listenfd, SAPC(&s->rem_addr), &s->addrlen);
-	if (s->connfd == -1)
+	*addrlen = sizeof(*rem_addr);
+	int connfd = accept(listenfd, SAPC(rem_addr), addrlen);
+	if (connfd == -1)
 		die("Can't accept a connection on a socket");
 	char tmp;
-	recvfrom(s->peerfd, &tmp, 1, 0, SAPC(&s->rem_addr), &s->addrlen);
+	recvfrom(peerfd, &tmp, 1, 0, SAPC(rem_addr), addrlen);
+	return connfd;
 }
 
-bool server_client_connected(struct server* s)
+bool net_client_connected(int connfd)
 {
 	char test;
-	bool conn_reset = send(s->connfd, &test, 1, MSG_NOSIGNAL) == -1;
-	if (conn_reset)
-		close(s->connfd);
-	return !conn_reset;
+	return !(send(connfd, &test, 1, MSG_NOSIGNAL) == -1);
 }
 
-#define MAX_PCKT_SIZE 65507
-#define PCKT_SIZE_FIELD_TYPE uint16_t
-#define MAX_DATA_SIZE MAX_PCKT_SIZE - sizeof(PCKT_SIZE_FIELD_TYPE)
-
-struct __attribute__((__packed__)) pckt {
-	PCKT_SIZE_FIELD_TYPE size;
-	void* data[MAX_DATA_SIZE];
-};
-
-static void send_msg(int peerfd, struct sockaddr* rem_addr, socklen_t addrlen,
-		     void* data, size_t size)
+void xsendto(int sockfd, const void* buf, size_t len, 
+	     const struct sockaddr_in* destaddr, socklen_t addrlen)
 {
-	if (size > MAX_DATA_SIZE) {
-		// TODO: make log function
-		char* fmt = "send_msg: msg too big (%u)";
-		syslog(LOG_WARNING, fmt, size);
-		printf(fmt, size);
-		return;
-	}
-	static struct pckt pckt;
-	pckt.size = size;
-	memcpy(pckt.data, data, size);
-	ssize_t ns = 0;
-	ssize_t prev  = 0;
-	size += sizeof(PCKT_SIZE_FIELD_TYPE);
-	while (ns < size) {
-		ns += sendto(peerfd, &pckt + ns, size - ns, MSG_NOSIGNAL,
-				rem_addr, addrlen);
-		if (ns < prev)
+	ssize_t ns_total = 0;
+	while (ns_total < len) {
+		ssize_t ns = sendto(sockfd, buf + ns_total, len - ns_total, 
+				    MSG_NOSIGNAL, SAPC(destaddr), addrlen);
+		if (ns == -1) // TODO
 			return;
-		prev = ns;
+		ns_total += ns;
 	}
-}
-
-void server_send_msg(struct server* s, void* data, size_t size)
-{
-	send_msg(s->peerfd, SAPC(&s->rem_addr), s->addrlen, data, size);
 }
 

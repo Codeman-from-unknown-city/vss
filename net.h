@@ -1,13 +1,17 @@
 #pragma once
 
-#include "stdbool.h"
-#include "stddef.h"
+#include <stdbool.h>
+#include <stddef.h>
 
-struct server* server_setup(short port);
+#define MAX_PCKT_SIZE 65507
 
-void server_wait_connection(struct server* s);
+int ip_named_socket(int type, char* hostname, unsigned short port);
 
-bool server_client_connected(struct server* s);
+int net_wait_connection(int listenfd, int peerfd, struct sockaddr_in* rem_addr,
+			 socklen_t* addrlen);
 
-void server_send_msg(struct server* s, void* data, size_t size);
+bool net_client_connected(int connfd);
+
+void xsendto(int sockfd, const void* buf, size_t len,
+	     const struct sockaddr_in* destaddr, socklen_t addrlen);
 
