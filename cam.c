@@ -13,10 +13,6 @@
 #include "cam.h"
 #include "utils.h"
 
-#define MAXFD 1024
-
-void** mmaped_imgs_pool[MAXFD];
-
 int cam_open(char* path)
 {
 	struct stat sb;
@@ -64,13 +60,11 @@ void cam_setfmt(int camfd, int imgh, int imgw, int pixfmt)
 	}
 }
 
-#define NBUFS 20
-
-static void req_bufs(int camfd)
+static void req_bufs(int camfd, size_t* nimgs)
 {
         struct v4l2_requestbuffers req;
 	memclr(&req, sizeof(req));
-        req.count = NBUFS;
+        req.count = *nimgs;
         req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         req.memory = V4L2_MEMORY_MMAP;
 	if (ioctl(camfd, VIDIOC_REQBUFS, &req) == -1) {
@@ -78,17 +72,19 @@ static void req_bufs(int camfd)
 			die("Camera does not support memory mappimg");
 		die("Can't reques buffers from camera");
 	}
-	if (req.count < NBUFS)
+	if (req.count < *nimgs)
 		die("Insufficient buffer memory on camera");
+	*nimsg = req.count;
 }
 
-static void mmap_imgs(int camfd)
+void** cam_mmap_imgs(int camfd, size_t* nimgs)
 {
-	void** mmaped_imgs = calloc(NBUFS, sizeof(*mmaped_imgs));
+	req_bufs(camfd, nimgs);
+	void** mmaped_imgs = calloc(*nimgs, sizeof(*mmaped_imgs));
         if (mmaped_imgs == NULL)
 		die("Out of memory");
 	struct v4l2_buffer buf;
-        for (int i = 0; i < NBUFS; ++i) {
+        for (int i = 0; i < *nimgs; ++i) {
 		memclr(&buf, sizeof(buf));
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 buf.memory = V4L2_MEMORY_MMAP;
@@ -100,41 +96,19 @@ static void mmap_imgs(int camfd)
 		if (mmaped_imgs[i] == MAP_FAILED)
 			die("Memory mapping failed");
         }
-	mmaped_imgs_pool[camfd] = mmaped_imgs;
+	return mmaped_imgs;
 }
 
-void cam_setup(int camfd)
-{
-	req_bufs(camfd);
-	mmap_imgs(camfd);
-}
+struct v4l2_buffer clipboard = {
+	.type = V4L2_BUF_TYPE_VIDEO_CAPTURE, 
+	.memory = V4L2_MEMORY_MMAP
+};
 
-static void enqueue_bufs(int camfd)
+void cam_enqueue_img(int camfd, size_t index)
 {
-	struct v4l2_buffer buf;
-	for (int i = 0; i < NBUFS; i++) {
-		memclr(&buf, sizeof(buf));
-		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf.memory = V4L2_MEMORY_MMAP;
-		buf.index = i;
-		if (ioctl(camfd, VIDIOC_QBUF, &buf))
-			die("Can't enqueue buffer");
-	}
-}
-
-void cam_turn_on(int camfd)
-{
-	enqueue_bufs(camfd);
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, VIDIOC_STREAMON, &type))
-			die("Can't start video capture");
-}
-
-void cam_turn_off(int camfd)
-{
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (ioctl(camfd, VIDIOC_STREAMOFF, &type))
-			die("Can't stop video capture");
+	clipboard.index = index;
+	if (ioctl(camfd, VIDIOC_QBUF, &buf) == -1)
+		die("Can't enqueue buffer");
 }
 
 static void wait_ready_state(int camfd)
@@ -157,17 +131,9 @@ static void wait_ready_state(int camfd)
 	}
 }
 
-void cam_grab_and_process_img(
-	int camfd,
-	void (*process_img)(void* base, size_t size, void* args),
-	void* args
-)
+void cam_dequeue_img(int camfd, size_t* index, size_t* size)
 {
 	wait_ready_state(camfd);
-	struct v4l2_buffer buf;
-	memclr(&buf, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	buf.memory = V4L2_MEMORY_MMAP;
 	for (;;) {
 		if (ioctl(camfd, VIDIOC_DQBUF, &buf)) {
 			if (EAGAIN == errno)
@@ -176,9 +142,23 @@ void cam_grab_and_process_img(
 		}
 		break;
 	}
-	void** mmaped_imgs = mmaped_imgs_pool[camfd];
-	(*process_img)(mmaped_imgs[buf.index], buf.bytesused, args);
-	if (ioctl(camfd, VIDIOC_QBUF, &buf))
-		die("Can't enqueue buffer");
+	*index = clipboard.index;
+	*size = clipboard.bytesused;
+}
+
+void cam_turn_on(int camfd, size_t nimgs)
+{
+	for (size_t i = 0; i < nimgs; i++)
+		cam_enqueue_img(camfd, i);
+	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (ioctl(camfd, VIDIOC_STREAMON, &type))
+			die("Can't start video capture");
+}
+
+void cam_turn_off(int camfd)
+{
+	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (ioctl(camfd, VIDIOC_STREAMOFF, &type))
+			die("Can't stop video capture");
 }
 
