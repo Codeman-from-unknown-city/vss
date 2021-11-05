@@ -73,7 +73,7 @@ void server_run(struct server* srv,
 
 bool server_client_connected(struct server* srv)
 {
-	char test;
-	return !(send(srv->connfd, &test, 1, MSG_NOSIGNAL) == -1);
+	char ping;
+	return !(send(srv->connfd, &ping, 1, MSG_NOSIGNAL) == -1);
 }
 
