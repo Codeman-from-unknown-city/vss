@@ -9,34 +9,29 @@
 #define HOSTNAME NULL
 #define PORT 8080
 
+void handle_conn(struct server* srv, int peerfd, 
+		 struct sockaddr* rem_addr, socklen_t addrlen, void* args)
+{
+	struct camera* cam = args;
+	cam_turn_on(cam);
+	while (server_client_connected(srv)) {
+		size_t sz;
+		void* frame = cam_grab_frame(cam, &sz);
+		if (sendto(peerfd, frame, sz, MSG_NOSIGNAL, rem_addr, addrlen) == -1)
+			die("Sending error");
+	}
+	cam_turn_off(cam);
+}
+
 int main()
 {
 #ifdef __DAEMON__
 	become_daemon();
 #endif
-	int camfd = cam_open("/dev/video0");
-	cam_setfmt(camfd, 0, 0, V4L2_PIX_FMT_MJPEG);
-	size_t nimgs = 8;
-	void** imgs = cam_mmap_imgs(camfd, &nimgs);
-	int listenfd = ip_named_socket(SOCK_STREAM, HOSTNAME, PORT);
-	if (listen(listenfd, 0))
-		die("Can't listen connections on a socket");
-	int peerfd = ip_named_socket(SOCK_DGRAM, HOSTNAME, PORT);
-	for (;;) {
-		struct sockaddr_in rem_addr;
-		socklen_t addrlen;
-		int connfd = net_wait_connection(listenfd, peerfd, 
-						 &rem_addr, &addrlen);
-		cam_turn_on(camfd, nimgs);
-		while (net_client_connected(connfd)) {
-			size_t i;
-			size_t sz;
-			cam_dequeue_img(camfd, &i, &sz);
-			xsendto(peerfd, imgs[i], sz, &rem_addr, addrlen);
-			cam_enqueue_img(camfd, i);
-		}
-		close(connfd);
-		cam_turn_off(camfd);
-	}
+	struct camera* cam = camera("/dev/video0");
+	cam_init(cam, V4L2_PIX_FMT_MJPEG, 0, 0, 0); // Default values
+	struct server* srv = server(HOSTNAME, PORT);
+	server_run(srv, handle_conn, cam);
+	return 0;
 }
 

@@ -15,7 +15,13 @@
 
 #define SAPC(ptr) (struct sockaddr*) ptr
 
-int ip_named_socket(int type, char* hostname, unsigned short port)
+struct server {
+	int listenfd;
+	int connfd;
+	int peerfd;
+};
+
+static int ip_named_socket(int type, char* hostname, unsigned short port)
 {
 	int sockfd = socket(AF_INET, type, 0);
 	if (sockfd == -1)
@@ -36,34 +42,38 @@ int ip_named_socket(int type, char* hostname, unsigned short port)
 	return sockfd;
 }
 
-int net_wait_connection(int listenfd, int peerfd, struct sockaddr_in* rem_addr,
-			 socklen_t* addrlen)
+struct server* server(char* hostname, uint16_t port)
 {
-	*addrlen = sizeof(*rem_addr);
-	int connfd = accept(listenfd, SAPC(rem_addr), addrlen);
-	if (connfd == -1)
-		die("Can't accept a connection on a socket");
-	char tmp;
-	recvfrom(peerfd, &tmp, 1, 0, SAPC(rem_addr), addrlen);
-	return connfd;
+	struct server* srv = malloc(sizeof(*srv));
+	srv->listenfd = ip_named_socket(SOCK_STREAM, hostname, port);
+	if (listen(srv->listenfd, 0))
+		die("Can't listen connections on a socket");
+	srv->peerfd = ip_named_socket(SOCK_DGRAM, hostname, port);
+	return srv;
 }
 
-bool net_client_connected(int connfd)
+void server_run(struct server* srv, 
+		void (*conn_handler)(struct server*, int peerfd, 
+				     struct sockaddr* rem_addr, 
+				     socklen_t addrlen, void* args), 
+		void* args)
+{
+	struct sockaddr_in rem_addr;
+	for (;;) {
+		socklen_t addrlen = sizeof(rem_addr);
+		srv->connfd = accept(srv->listenfd, SAPC(&rem_addr), &addrlen);
+		if (srv->connfd == -1)
+			die("Can't accept a connection on a socket");
+		char req;
+		recvfrom(srv->peerfd, &req, 1, 0, SAPC(&rem_addr), &addrlen);
+		conn_handler(srv, srv->peerfd, SAPC(&rem_addr), addrlen, args);
+	}
+	close(srv->connfd);
+}
+
+bool server_client_connected(struct server* srv)
 {
 	char test;
-	return !(send(connfd, &test, 1, MSG_NOSIGNAL) == -1);
-}
-
-void xsendto(int sockfd, const void* buf, size_t len, 
-	     const struct sockaddr_in* destaddr, socklen_t addrlen)
-{
-	ssize_t ns_total = 0;
-	while (ns_total < len) {
-		ssize_t ns = sendto(sockfd, buf + ns_total, len - ns_total, 
-				    MSG_NOSIGNAL, SAPC(destaddr), addrlen);
-		if (ns == -1) // TODO
-			return;
-		ns_total += ns;
-	}
+	return !(send(srv->connfd, &test, 1, MSG_NOSIGNAL) == -1);
 }
 

@@ -7,12 +7,17 @@
 
 #define MAX_PCKT_SIZE 65507
 
-int ip_named_socket(int type, char* hostname, unsigned short port);
+struct server;
 
-int net_wait_connection(int listenfd, int peerfd, struct sockaddr_in* rem_addr,
-			 socklen_t* addrlen);
+struct server* server(char* hostname, uint16_t port);
 
-bool net_client_connected(int connfd);
+void server_run(struct server*, 
+		void (*conn_handler)(struct server*, int peerfd, 
+				     struct sockaddr* rem_addr, 
+				     socklen_t addrlen, void* args),
+		void* args);
+
+bool server_client_connected(struct server*);
 
 void xsendto(int sockfd, const void* buf, size_t len,
 	     const struct sockaddr_in* destaddr, socklen_t addrlen);

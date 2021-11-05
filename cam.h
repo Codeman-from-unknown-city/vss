@@ -3,17 +3,15 @@
 #include <stddef.h>
 #include <linux/videodev2.h>
 
-int cam_open(char* path);
+struct camera;
 
-void cam_setfmt(int camfd, int imgh, int imgw, int pixfmt);
+struct camera* camera(char* path);
 
-void** cam_mmap_imgs(int camfd, size_t* nimgs);
+void cam_init(struct camera* cam, int pixfmt, int imgh, int imgw, size_t nbufs);
 
-void cam_enqueue_img(int camfd, size_t index);
+void cam_turn_on(struct camera* cam);
 
-void cam_dequeue_img(int camfd, size_t* index, size_t* size);
+void cam_turn_off(struct camera* cam);
 
-void cam_turn_on(int camfd, size_t nimgs);
-
-void cam_turn_off(int camfd);
+void** cam_grab_frame(struct camera* cam, size_t* size);
 
