@@ -67,8 +67,8 @@ void server_run(struct server* srv,
 		char req;
 		recvfrom(srv->peerfd, &req, 1, 0, SAPC(&rem_addr), &addrlen);
 		conn_handler(srv, srv->peerfd, SAPC(&rem_addr), addrlen, args);
+		close(srv->connfd);
 	}
-	close(srv->connfd);
 }
 
 bool server_client_connected(struct server* srv)
